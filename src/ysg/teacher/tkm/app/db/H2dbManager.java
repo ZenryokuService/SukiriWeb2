@@ -13,6 +13,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
+import sukiri.data.LoginData;
+
 /**
  * インストールしたH2DBの管理クラス(DAO)
  *
@@ -31,15 +33,16 @@ public class H2dbManager {
 	 */
 	private H2dbManager() {
 		try {
-
-			con = DriverManager.getConnection("jdbc:h2:C:\\Users\\tkm-yogo\\Documents\\sampleCode\\database");
+			Class.forName("org.h2.Driver");
+			con = DriverManager.getConnection("jdbc:h2:tcp://localhost/file:C:\\pleiades-2020-03-java-win-64bit-jre_20200322\\pleiades\\workspace\\SukiriWeb2\\WebContent\\WEB-INF\\database");
 			Statement stmt = con.createStatement();
-			ResultSet result = stmt.executeQuery("select * from TEST;");
-			result.next();
-			String id = result.getString(1);
-			String name = result.getString(2);
-			System.out.println("ID: " + id + "Name: " + name);
+			stmt.execute(SQLConst.CREATE_USER_TBL);
+			stmt.execute(SQLConst.CREATE_ITEM_TBL);
+			stmt.execute(SQLConst.CREATE_ITEM_TYPE_TBL);
 		} catch (SQLException e) {
+			e.printStackTrace();
+			System.exit(-1);
+		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(-1);
 		}
@@ -61,9 +64,19 @@ public class H2dbManager {
 	 */
 	@Override
 	public void finalize() {
+		if (con == null) {
+			return;
+		}
 
-		con = null;
-		instance = null;
+		try {
+			con.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+
+		} finally {
+			con = null;
+			instance = null;
+		}
 	}
 
 	/**
@@ -102,7 +115,7 @@ public class H2dbManager {
 		return list;
 	}
 	/**
-	 * SELECT文を実行する。
+	 * SELECT文を実行する。表示するだけ。
 	 *
 	 * @param sql SELECT文
 	 * @return 成功：
@@ -137,6 +150,39 @@ public class H2dbManager {
 	}
 
 	/**
+	 * SELECT文を実行する。表示するだけ。
+	 *
+	 * @param sql SELECT文
+	 * @param key 対象のキーになる値
+	 * @return 成功：
+	 */
+	public LoginData selectUser(String userName, String passwd) {
+		ResultSet result = null;
+		LoginData data = null;
+
+		StringBuilder build = new StringBuilder();
+		try {
+			PreparedStatement stmt = con.prepareStatement(SQLConst.SELECT_USER_FOR_LOGIN);
+			stmt.setString(1, userName);
+			stmt.setString(2, passwd);
+			result = stmt.executeQuery();
+			ResultSetMetaData meta = result.getMetaData();
+			int count = meta.getColumnCount();
+			for (int i = 1; i <= count; i++) {
+				build.append(meta.getColumnName(i) + ",");
+			}
+			String header = build.toString().substring(0, build.length() -1);
+			System.out.println(header);
+			StringBuilder datas = new StringBuilder();
+			if (result.next()) {
+				data = new LoginData(result.getString(2), result.getInt(4));
+			}
+		} catch (SQLException se) {
+			se.printStackTrace();
+		}
+		return data;
+	}
+	/**
 	 * Create文などのSELECT以外のSQLを実行する。
 	 * @param sql
 	 */
@@ -149,6 +195,11 @@ public class H2dbManager {
 			se.printStackTrace();
 		}
 		return isSuccess;
+	}
+
+	public PreparedStatement createPreparedStatement(String sql) throws SQLException {
+		// プリペアードステートメント
+		return con.prepareStatement(sql);
 	}
 
 	public boolean importCsv(Path path) throws IOException, SQLException {
